@@ -1,0 +1,8 @@
+generate_db4force-Copy.py
+__pycache__/
+PoligonizadorCopy.py
+PoligonizadorTRI.py
+Soils/
+Slope_SRTM_Zone_WGS84.tif
+WRFProno_20240911061623.nc
+data.2024.0721.tif
