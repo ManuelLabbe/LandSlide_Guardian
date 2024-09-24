@@ -47,8 +47,9 @@ def data_from_features_model(features: list, PATH = 'Soils/'):
     # ahora de esta forma podemos pedir las features del modelo y verificamos a traves del diccionario
     # donde estan ubicada cada feature para de esta forma obtener los datos necesarios
     #path_file = []
-    features = ['PIRange_Bulkd.30-60cm.tif']
+    features = ['PIRange_Bulkd.30-60cm.tif', 'alpha_5-15cm.tif']
     path_file = [k +'/'+i for k,v in files_dict.items() for i in v if i in features]
+    print('-'*50)
     print(f'path de cada archivo: {path_file}\n')
     
     # Ahora a partir de la entrada features: list se obtendran los path necesarios para luego extraer
@@ -59,7 +60,28 @@ def data_from_features_model(features: list, PATH = 'Soils/'):
     # PREGUNTAR: como obtengo los pixeles (o lat lon)
     
     
-    return files_dict
+    return path_file
+
+def tif_data_from_files_features(path_files: list[str], path_output_tif = 'output/output.tif', PATH= 'Soils/'):
+    data_dict = {}
+    with rasterio.open(path_output_tif) as src:
+        meta = src.meta
+        data = src.read(1)
+        width = meta['width']
+        height = meta['height']
+        window = src.window(*src.bounds)
+        print('Valores de window: ', window)
+        data_window = src.read(1,window=window)
+        data_dict = {'window_data': data_window}
+
+    for path in path_files:
+        with rasterio.open(PATH + path) as src:
+            data = src.read(1, window=window)
+            data_dict.update({path: data})
+            
+    for k,v in data_dict.items():
+        print(f'Key: {k} - Data: {v}')
+
 
 def raster2vector(path_files: list[str], features: list[str], PATH = 'Soils/', PATH_SLOPE = 'Slope_SRTM_Zone_WGS84.tif', PATH_PP = 'datda.2024.01.01.tif'):
     # Pasar raster a vector
@@ -72,6 +94,16 @@ def raster2vector(path_files: list[str], features: list[str], PATH = 'Soils/', P
         data = src_slope.read(window=window)
         left, bottom, right, top = bounds(window, transform=src_pp.transform)
         new_transform, width, height = calculate_default_transform(src_slope.crs, src_pp.crs, data.shape[1], data.shape[0], left, bottom, right, top)
+        height = window.height
+        width = window.width
+        kwargs = src_pp.meta.copy()
+        kwargs.update({
+            'width': width,
+            'height': height
+        })
+        
+    
+        
         
     
 if __name__ == '__main__':
@@ -81,10 +113,11 @@ if __name__ == '__main__':
     print(f'Cantidad de caracteristcas: {len(features)}')
     
     # testear data_from_features_model
-    files = data_from_features_model(features=features)
-    print(type(files))
-    for k, v in files.items():
-        print(f'Dentro de carpeta {k} estan los archivos {v}')
+    path_files = data_from_features_model(features=features)
+    print(type(path_files))
+    print(f'Los path de todos los files {path_files}')
+    
+    tif_data_from_files_features(path_files)
     # paso 2
     # cargar datos de variables X de modelo entrenado, considerar raster de humedad como valor de 0.3 y cargar un rasteer de pp aleatoreo con nombre pp1.tif
     
