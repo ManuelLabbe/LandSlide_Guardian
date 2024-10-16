@@ -74,13 +74,21 @@ def tif_data_from_files_features(path_files: list[str], path_output_tif = 'outpu
         data_window = src.read(1,window=window)
         data_dict = {'window_data': data_window}
 
-    for path in path_files:
-        with rasterio.open(PATH + path) as src:
-            data = src.read(1, window=window)
-            data_dict.update({path: data})
-            
-    for k,v in data_dict.items():
-        print(f'Key: {k} - Data: {v}')
+        for path in path_files:
+            with rasterio.open(PATH + path) as src1:
+                data = src1.read(1, window=window)
+                print(f'Valores de data en {path}: ', np.unique(data))
+                print(f'Cantidad de valores dentro de window: {data.size}')
+                
+                # Obtener frecuencia de cada valor
+                # funcion sacada de https://stackoverflow.com/questions/28663856/how-to-count-the-occurrence-of-certain-item-in-an-ndarray-in-python
+                # Descomentar para obtener la frecuencia de cada valor
+                
+                #unique_values, counts = np.unique(data, return_counts=True)
+                #frequency_dict = dict(zip(unique_values, counts))
+    
+                #print(f'Frecuencia de cada valor: {frequency_dict}')
+                #data_dict.update({PATH + path: data})
 
 
 def raster2vector(path_files: list[str], features: list[str], PATH = 'Soils/', PATH_SLOPE = 'Slope_SRTM_Zone_WGS84.tif', PATH_PP = 'datda.2024.01.01.tif'):
@@ -102,9 +110,7 @@ def raster2vector(path_files: list[str], features: list[str], PATH = 'Soils/', P
             'height': height
         })
         
-    
-        
-        
+
     
 if __name__ == '__main__':
     model, features = load_models_and_features('models/catboost_model_random_search.pkl')
@@ -131,7 +137,6 @@ if __name__ == '__main__':
     
     # paso 5
     # pasar proba de Y a matriz como reshape
-    
     
     # paso 6
     # guardar matriz como geotiff usar quizas rasterio
