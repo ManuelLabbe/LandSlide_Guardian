@@ -3,6 +3,8 @@ import os
 import catboost
 import numpy as np
 import rasterio
+from tqdm import tqdm
+import pandas as pd
 from shapely.geometry import box
 from rasterio.windows import from_bounds, bounds
 from rasterio.warp import calculate_default_transform, reproject, Resampling
@@ -47,7 +49,7 @@ def data_from_features_model(features: list, PATH = 'Soils/'):
     # ahora de esta forma podemos pedir las features del modelo y verificamos a traves del diccionario
     # donde estan ubicada cada feature para de esta forma obtener los datos necesarios
     #path_file = []
-    features = ['PIRange_Bulkd.30-60cm.tif', 'alpha_5-15cm.tif']
+    #features = ['PIRange_Bulkd.30-60cm.tif', 'alpha_5-15cm.tif']
     path_file = [k +'/'+i for k,v in files_dict.items() for i in v if i in features]
     print('-'*50)
     print(f'path de cada archivo: {path_file}\n')
@@ -70,14 +72,14 @@ def tif_data_from_files_features(path_files: list[str], path_output_tif = 'outpu
         width = meta['width']
         height = meta['height']
         window = src.window(*src.bounds)
-        print('Valores de window: ', window)
         data_window = src.read(1,window=window)
+        print('Valores de window: ', len(data_window))
         data_dict = {'window_data': data_window}
-
+        #print(f'Valores en window: {np.unique(data_window)}, largo de window: {len(data_window)}')
         for path in path_files:
             with rasterio.open(PATH + path) as src1:
                 data = src1.read(1, window=window)
-                print(f'Valores de data en {path}: ', np.unique(data))
+                print(f'Valores de data en {path}:  {np.unique(data)}, largo de {path}: {len(data)}')
                 print(f'Cantidad de valores dentro de window: {data.size}')
                 
                 # Obtener frecuencia de cada valor
@@ -89,6 +91,31 @@ def tif_data_from_files_features(path_files: list[str], path_output_tif = 'outpu
     
                 #print(f'Frecuencia de cada valor: {frequency_dict}')
                 #data_dict.update({PATH + path: data})
+                
+def tif_data_from_files_features(path_files: list[str], path_output_tif = 'output/output.tif', PATH= 'Soils/'):
+    # Open base raster to get metadata and coordinates
+    with rasterio.open(path_output_tif) as src:
+        meta = src.meta
+        base_data = src.read(1)
+        window = src.window(*src.bounds)
+        data_window = src.read(1,window=window)
+        height = meta['height']
+        width = meta['width']
+        rows, cols = np.meshgrid(range(height), range(width), indexing='ij')
+        xs, ys = rasterio.transform.xy(src.transform, rows.flatten(), cols.flatten())
+        
+        df = pd.DataFrame({
+            'longitude': xs,
+            'latitude': ys,
+            'base_raster': data_window.flatten()
+        })
+        
+        for path in tqdm(path_files, desc='Procesando archivos'):
+            with rasterio.open(PATH + path) as file_src:
+                data = file_src.read(1, window=window)
+                df[path] = data.flatten()
+        df.to_csv('output/data.csv', index=False)
+    return df
 
 
 def raster2vector(path_files: list[str], features: list[str], PATH = 'Soils/', PATH_SLOPE = 'Slope_SRTM_Zone_WGS84.tif', PATH_PP = 'datda.2024.01.01.tif'):
