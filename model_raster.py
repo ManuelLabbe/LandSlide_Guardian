@@ -92,7 +92,7 @@ def tif_data_from_files_features(path_files: list[str], path_output_tif = 'outpu
                 #print(f'Frecuencia de cada valor: {frequency_dict}')
                 #data_dict.update({PATH + path: data})
                 
-def tif_data_from_files_features(path_files: list[str], path_output_tif = 'output/output.tif', PATH= 'Soils/'):
+def tif_data_from_files_features(path_files: list[str], path_output_tif = 'Slope_SRTM_Zone_WGS84.tif', PATH= 'Soils/'):
     # Open base raster to get metadata and coordinates
     with rasterio.open(path_output_tif) as src:
         meta = src.meta
@@ -101,9 +101,9 @@ def tif_data_from_files_features(path_files: list[str], path_output_tif = 'outpu
         data_window = src.read(1,window=window)
         height = meta['height']
         width = meta['width']
+        print(f'Height: {height}, Width: {width}')
         rows, cols = np.meshgrid(range(height), range(width), indexing='ij')
         xs, ys = rasterio.transform.xy(src.transform, rows.flatten(), cols.flatten())
-        
         df = pd.DataFrame({
             'longitude': xs,
             'latitude': ys,
