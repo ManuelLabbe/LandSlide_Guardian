@@ -3,7 +3,17 @@ import os
 import catboost
 import numpy as np
 import rasterio
+from netCDF4 import Dataset
+from osgeo import gdal, gdalconst, osr
 from tqdm import tqdm
+import rasterio
+import pandas as pd
+import numpy as np
+from tqdm import tqdm
+import multiprocessing as mp
+from concurrent.futures import ThreadPoolExecutor
+import numpy as np
+from functools import partial
 import pandas as pd
 from shapely.geometry import box
 from rasterio.windows import from_bounds, bounds
@@ -137,6 +147,269 @@ def raster2vector(path_files: list[str], features: list[str], PATH = 'Soils/', P
             'height': height
         })
         
+def nc_to_tif(nc_file_path = 'WRFProno_20240908181246.nc'):
+    # convertir archivo nc a tif
+    nc_file = Dataset(nc_file_path, 'r')
+
+    lon = nc_file.variables['XLONG'][:]
+    lat = nc_file.variables['XLAT'][:]
+    lon_min, lon_max = lon.min(), lon.max()
+    lat_min, lat_max = lat.min(), lat.max()
+    print(f'Latitud {lat_min} {lat_max}')
+    print(f'Longitud {lon_min} {lon_max}')
+
+    cols, rows = len(lon[0]), len(lat[0])
+    rainnc = nc_file.variables['RAINNC']
+    cols, rows = np.size(rainnc[0], 1), np.size(rainnc[0], 0)
+    dx = (lon_max - lon_min) / cols
+    dy = (lat_max - lat_min) / rows
+    transform = [lon_min, dx, 0, lat_min, 0, dy]
+
+    
+    string_date = []
+
+    for time_index, timestamp_bytes in enumerate(nc_file.variables['Times']):
+        timestamp_str = b''.join(timestamp_bytes).decode('utf-8')
+        string_date.append(timestamp_str[:10])
+
+    fec_uni = set(string_date)
+    print(fec_uni)
+    for ind in fec_uni:
+        ind_fec = [indice for indice, valor in enumerate(string_date) if valor == ind]
+        print(max(ind_fec), min(ind_fec))
+        if min(ind_fec) > 0:
+            data1 = rainnc[max(ind_fec), :, :] - rainnc[min(ind_fec)-1, :, :]
+        else:
+            data1 = rainnc[max(ind_fec), :, :]
+        print(data1.shape)
+        
+        output_tif_path = fr'output/{ind[:4]}_{ind[5:7]}_{ind[8:10]}.tif'    
+        driver = gdal.GetDriverByName('GTiff')
+        print(f'rows, cols: {output_tif_path} {rows} {cols}')
+        output_tiff = driver.Create(output_tif_path, cols,rows,  1, gdal.GDT_Float32)
+
+        output_tiff.SetGeoTransform(transform)
+        srs = osr.SpatialReference()
+        srs.ImportFromEPSG(4326)
+        output_tiff.SetProjection(srs.ExportToWkt())
+        print('-'*20,np.flipud(data1))
+        #data = np.flipud(data1) # No entiendo
+        data = data1
+        output_tiff.GetRasterBand(1).WriteArray(data)
+        output_tiff = None
+    nc_file.close()
+
+def reproyectar_raster_PP(path_slope = 'Slope_SRTM_Zone_WGS84.tif', path_pp1 = 'output/2024_09_10.tif', path_name_output = 'output/output_pp.tif'):
+
+    with rasterio.open(path_slope) as src1, rasterio.open(path_pp1) as src2:
+        ext1 = box(*src1.bounds)
+        ext2 = box(*src2.bounds)
+        print(f'ext1: {ext1}\next2: {ext2}')
+        
+        # Intersection devuelve la geometría que se comparte entre las geometrías de entrada
+        intersection = ext1.intersection(ext2)
+        print(f'intersection: {intersection}')
+        
+        window = from_bounds(*intersection.bounds, src1.transform)
+        print(f'Ventanas: {window}')
+        
+        # Leer los datos de la ventana de intersección del archivo de precipitación
+        data_pp = src2.read(1, window=window)
+        print(f'Tipo de dato {type(data_pp)}\nDatos: {data_pp}')
+        print('bounds:', bounds(window, src1.transform))
+        
+        left, bottom, right, top = bounds(window, src1.transform)
+        new_transform = src1.window_transform(window)
+        height = window.height
+        width = window.width
+        print(f'La ventana es: {width} X {height}, Teniendo: {window}')
+        
+        kwargs = src1.meta.copy()
+        print(f'Los kawrgs: {kwargs}')
+        kwargs.update({
+            'width': width,
+            'height': height,
+            'transform': new_transform,
+            'crs': src2.crs  # Asegúrate de que el CRS sea el mismo que el de src2
+        })
+        print(f'kwargs: {kwargs}')
+        print(window)
+        
+        # Creación del nuevo archivo TIFF con los datos de precipitación
+        with rasterio.open(path_name_output, 'w', **kwargs) as dst:
+            dst.write(data_pp, 1)
+            
+def reproyectar_raster_slope(path_slope = 'Slope_SRTM_Zone_WGS84.tif', path_pp = 'output/2024_09_12.tif', path_name_output = 'output/output.tif'):
+    with rasterio.open(path_slope) as src1, rasterio.open(path_pp) as src2:
+        ext1 = box(*src1.bounds)
+        ext2 = box(*src2.bounds)
+        print(f'ext1: {ext1}\next2: {ext2}')
+        # intersection devuelve la geometria que se comparte entre las geometrias de entradas
+        intersection = ext1.intersection(ext2)
+        print(f'intersection: {intersection}')
+        
+        window = from_bounds(*intersection.bounds, src1.transform)
+        print(f'Ventanas: {window}')
+        data = src1.read(window=window)
+        print(f'Tipo de dato {type(data)}\nDatos: {data}')
+        print('bounds:', bounds(window, src1.transform))
+        left, bottom, right, top = bounds(window, src1.transform)
+        #calculate default transform: (source coor, target coor, width, height, left, bot,right, top)
+        #print('src1.crs',src1.crs)
+        #print('src2.crs',src2.crs)
+        print('data.shape[1]', data.shape[1])
+        print('data.shape[2]', data.shape[2])
+        new_transform, width, height = calculate_default_transform(src1.crs, src1.crs, data.shape[2], data.shape[1],
+                                                                left, bottom, right, top)
+        height = window.height
+        width = window.width
+        #new_transform, width, height = calculate_default_transform(src1.crs, src1.crs, width, height,
+        #                                                           left, bottom, right, top)
+        print(f'La ventana es: {width} X {height}, Teniendo: {window}')
+        kwargs = src1.meta.copy()
+        print(kwargs)
+        kwargs.update({
+            'width': width,
+            'height': height
+        })
+        print(f'kwargs: {kwargs}')
+        print(window)
+        # Creación del nuevo path
+        with rasterio.open(path_name_output, 'w+', **kwargs) as dst:
+            print('------------------------------------------\n',data)
+            reproject(
+                source=data,
+                destination=rasterio.band(dst, 1),
+                src_transform=src1.window_transform(window),
+                window=window,
+                src_crs=src1.crs,
+                dst_crs=src2.crs,
+                dst_transform=new_transform,
+                resampling=Resampling.bilinear
+            )
+            
+def tif_to_dataframe_with_window_parallel(reference_tif: str, tif_paths: list[str]):
+    def process_tif(args):
+        tif_path, longs, lats, ref_crs = args
+        with rasterio.open(tif_path) as src:
+            if src.crs != ref_crs:
+                raise ValueError(f"El CRS de {tif_path} no coincide con el del TIF de referencia.")
+            # Vectorized sampling
+            values = np.array([x[0] if x else np.nan for x in src.sample(zip(longs, lats))])
+            return tif_path.split('/')[-1], values
+
+    with rasterio.open(reference_tif) as ref_src:
+        
+        meta = ref_src.meta
+        ref_array = ref_src.read(1)
+        ref_transform = ref_src.transform
+        height = meta['height']
+        width = meta['width']
+        #mask = ref_array != ref_src.nodatavals[0]
+        #rows, cols = np.where(mask)
+        print('Realizando meshgrid...')
+        rows, cols = np.meshgrid(range(height), range(width), indexing='ij')
+        print(f'rows: {rows.flatten()}\ncols: {cols.flatten()}')
+        print('Realizando transform desde xy...')
+        xs, ys = rasterio.transform.xy(ref_src.transform, rows.flatten(), cols.flatten())
+        # Get coordinates
+        longitudes = np.array(xs)
+        latitudes = np.array(ys)
+        
+        # Combine all paths
+        all_paths = tif_paths + ['output/output.tif', 'output/output_pp.tif']
+        
+        # Prepare arguments for parallel processing
+        args = [(path, longitudes, latitudes, ref_src.crs) for path in all_paths]
+        
+        # Process in parallel
+        with ThreadPoolExecutor(max_workers=mp.cpu_count()-1) as executor:
+            results = list(tqdm(
+                executor.map(lambda x: process_tif(x), args),
+                total=len(all_paths),
+                desc="Procesando archivos"
+            ))
+        
+        # Create DataFrame
+        data = {
+            'Latitude': latitudes,
+            'Longitude': longitudes,
+            **dict(results)
+        }
+        
+        return pd.DataFrame(data)
+    
+    def tif_to_dataframe_with_window_parallel(reference_tif: str, tif_paths: list[str]):
+        def process_tif(args):
+            tif_path, longs, lats, ref_crs = args
+            with rasterio.open(tif_path) as src:
+                if src.crs != ref_crs:
+                    raise ValueError(f"El CRS de {tif_path} no coincide con el del TIF de referencia.")
+                # Vectorized sampling
+                values = np.array([x[0] if x else np.nan for x in src.sample(zip(longs, lats))])
+                return tif_path.split('/')[-1], values
+
+    with rasterio.open(reference_tif) as ref_src:
+        
+        meta = ref_src.meta
+        ref_array = ref_src.read(1)
+        ref_transform = ref_src.transform
+        height = meta['height']
+        width = meta['width']
+        #mask = ref_array != ref_src.nodatavals[0]
+        #rows, cols = np.where(mask)
+        print('Realizando meshgrid...')
+        rows, cols = np.meshgrid(range(height), range(width), indexing='ij')
+        print(f'rows: {rows.flatten()}\ncols: {cols.flatten()}')
+        print('Realizando transform desde xy...')
+        xs, ys = rasterio.transform.xy(ref_src.transform, rows.flatten(), cols.flatten())
+        
+        longitudes = np.array(xs)
+        latitudes = np.array(ys)
+        
+        
+        all_paths = tif_paths + ['output/output.tif', 'output/output_pp.tif']
+        
+        
+        args = [(path, longitudes, latitudes, ref_src.crs) for path in all_paths]
+        
+        # Process in parallel
+        with ThreadPoolExecutor(max_workers=mp.cpu_count()-1) as executor:
+            results = list(tqdm(
+                executor.map(lambda x: process_tif(x), args),
+                total=len(all_paths),
+                desc="Procesando archivos"
+            ))
+        
+        data = {
+            'Latitude': latitudes,
+            'Longitude': longitudes,
+            **dict(results)
+        }
+        
+        return pd.DataFrame(data)
+    
+def df_in_model_to_proba(df: pd.DataFrame, model):
+    X = df.drop(columns=['Latitude', 'Longitude'])
+    proba = model.predict_proba(X)
+    return proba
+
+def proba_in_df(df: pd.DataFrame, proba: np.array) -> pd.DataFrame:
+    df['Probabilidad'] = proba[:, 1]
+    return df
+
+def save_df_to_csv(df: pd.DataFrame, path: str):
+    df.to_csv(path, index=False)
+
+def proba_to_tif(df: pd.Dataframe, reference_tif: str, path_output: str):
+    with rasterio.open(reference_tif) as ref_src:
+        meta = ref_src.meta
+        height = meta['height']
+        width = meta['width']
+        proba = df['Probabilidad'].values
+        proba = proba.reshape(height, width)
+        with rasterio.open(path_output, 'w', **meta) as dst:
+            dst.write(proba, 1)
 
     
 if __name__ == '__main__':
