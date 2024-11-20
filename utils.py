@@ -1,5 +1,6 @@
 import os
-
+import numpy as np
+import configparser
 def check_output_directory():
     output_dir = 'output'
     if not os.path.exists(output_dir):
@@ -23,3 +24,14 @@ def check_output_subdirectories():
         if not os.path.exists(dir_path):
             print(f"Creando directorio '{dir_path}/'")
             os.makedirs(dir_path)
+            
+def create_structure():
+    print('===================================================================')
+    print('Reading config')
+    structu={}
+    conf=configparser.ConfigParser()
+    conf.read('config_RILEWS-Copy1.conf')
+    structu['conf']=conf
+    print('\tDone')
+    print('\n')
+    return structu
