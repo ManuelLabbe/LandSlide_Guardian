@@ -30,7 +30,7 @@ def create_structure():
     print('Reading config')
     structu={}
     conf=configparser.ConfigParser()
-    conf.read('config_RILEWS-Copy1.conf')
+    conf.read('config_RILEWS.conf')
     structu['conf']=conf
     print('\tDone')
     print('\n')
