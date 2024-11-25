@@ -182,7 +182,7 @@ def nc_to_tif(nc_file_path = 'WRFProno_20240908181246.nc'):
             data1 = rainnc[max(ind_fec), :, :]
         #print(data1.shape)
         
-        output_tif_path = fr'output/{ind[:4]}_{ind[5:7]}_{ind[8:10]}.tif'    
+        output_tif_path = fr'output/tif_nc_pp/{ind[:4]}_{ind[5:7]}_{ind[8:10]}.tif'    
         driver = gdal.GetDriverByName('GTiff')
         #print(f'rows, cols: {output_tif_path} {rows} {cols}')
         output_tiff = driver.Create(output_tif_path, cols,rows,  1, gdal.GDT_Float32)
@@ -313,12 +313,19 @@ def tif_to_dataframe_with_window_parallel(reference_tif: str, tif_paths: list[st
         height = meta['height']
         width = meta['width']
         print('Realizando meshgrid...')
+
+        # ----------- Test 
+        #height = ref_src.height  # or meta['height']
+        #width = ref_src.width   # or meta['width']
+        total_pixels = height * width
     
+        print(f"Dimensions: {height}x{width} pixels ({total_pixels} total)")
+        # -----------
         # Siguiente linea: función para sólo usar una fracción de los datos para testear la función:
         # adapta aleatoriamente n_samples a partir de rows, cols, modoficando rows, cols
         # comentantar lienea sample_random_indices para usar todos los puntos
         rows, cols = np.meshgrid(range(height), range(width), indexing='ij')
-        rows, cols = sample_random_indices(rows, cols, n_samples=100000)
+        #rows, cols = sample_random_indices(rows, cols, n_samples=100000)
         
         print(f'rows: {rows.flatten()}\ncols: {cols.flatten()}')
         print('-'*50)

@@ -16,6 +16,7 @@ if __name__ == '__main__':
     path_model = structu['conf']['ML']['path']
     path_nc = structu['conf']['NC']['lc']
     path_slope_data = structu['conf']['data_source']['slope_data']
+    
     # Se verifica que los directorios existan
     check_output_directory()
     check_output_subdirectories()
@@ -32,8 +33,8 @@ if __name__ == '__main__':
     nc_to_tif(nc_file_path = path_nc)
     
     # Se reproyectan los rasters
-    reproyectar_raster_slope(path_slope = path_slope_data, path_pp='output/2024_09_10.tif', path_name_output = 'output/tif/output.tif')
-    reproyectar_raster_PP(path_slope = path_slope_data, path_pp1 = 'output/2024_09_10.tif', path_name_output = 'output/tif/output_pp.tif')
+    reproyectar_raster_slope(path_slope = path_slope_data, path_pp='output/tif_nc_pp/2024_09_10.tif', path_name_output = 'output/tif/output.tif')
+    reproyectar_raster_PP(path_slope = path_slope_data, path_pp1 = 'output/tif_nc_pp/2024_09_10.tif', path_name_output = 'output/tif/output_pp.tif')
     
     # Se obtiene el dataframe con las features
     reference_tif = 'output/tif/output.tif'
