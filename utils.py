@@ -18,7 +18,7 @@ def check_models_directory():
         raise FileNotFoundError("El directorio 'models/' no existe\n")
     
 def check_output_subdirectories():
-    output_dirs = ['output/tif', 'output/csv']
+    output_dirs = ['output/tif', 'output/csv', 'output/tif_nc_pp']
     
     for dir_path in output_dirs:
         if not os.path.exists(dir_path):

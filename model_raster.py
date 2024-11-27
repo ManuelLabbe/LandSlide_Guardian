@@ -315,8 +315,8 @@ def tif_to_dataframe_with_window_parallel(reference_tif: str, tif_paths: list[st
         print('Realizando meshgrid...')
 
         # ----------- Test 
-        #height = ref_src.height  # or meta['height']
-        #width = ref_src.width   # or meta['width']
+        #height = ref_src.height  #
+        #width = ref_src.width   #
         total_pixels = height * width
     
         print(f"Dimensions: {height}x{width} pixels ({total_pixels} total)")
